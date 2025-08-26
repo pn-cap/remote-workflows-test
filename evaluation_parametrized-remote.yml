@@ -1,0 +1,100 @@
+# .github/workflows/evaluation_parametrized.yml
+name: 🔁 Call Evaluation Workflow (parametrized) - remote
+
+on:
+  workflow_dispatch:  # Enables manual trigger
+    inputs:
+      python_version:
+        description: "Python version"
+        required: false
+        type: string
+        default: "3.11"
+      working_directory:
+        description: "Working directory"
+        required: false
+        type: string
+        default: "./"
+      requirements_filepath:
+        description: "Filepath for requirements.txt"
+        required: false
+        type: string
+        default: "./requirements.txt"
+      evaluation_filepath:
+        description: "Evaluation filepTH"
+        required: false
+        type: string
+        default: "./evaluation/evaluation.py"
+  workflow_call:
+    inputs:
+      python_version:
+        description: "Python version"
+        required: false
+        type: string
+        default: "3.11"
+      working_directory:
+        description: "Working directory"
+        required: false
+        type: string
+        default: "./"
+      requirements_filepath:
+        description: "Filepath for requirements.txt"
+        required: false
+        type: string
+        default: "./requirements.txt"
+      evaluation_filepath:
+        description: "Evaluation filepTH"
+        required: false
+        type: string
+        default: "./evaluation/evaluation.py"
+permissions:
+  pull-requests: write # For commenting on PRs
+  issues: write # For commenting on issues
+jobs:
+  run-evaluation:
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+
+    steps:
+        # Check out the code
+      - name: Checkout repository 
+        uses: actions/checkout@v3 
+
+        # Set up Python environment
+      - name: Set up Python 
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install dependencies  
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ${{ inputs.requirements_filepath }}
+
+      - name: Run Evaluation
+        run: python ${{ inputs.evaluation_filepath }}
+    
+      - name: Comment on PR with results  
+        if: github.event.pull_request != null # Triggers only for PR events
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            
+            // Condition to comment only if called by PR event
+            const fs = require('fs');
+
+            let results = '';
+            if (fs.existsSync('results.md')) {
+              results = fs.readFileSync('results.md', 'utf8');
+            } else {
+              results = 'No results.md file found.';
+            }
+            const actor = process.env.GITHUB_ACTOR || 'unknown';
+            const runUrl = `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const body = `✅ **Workflow Result**\n\n${results}\n\n_triggered by **${actor}**_\n\n🔗 [View full pipeline run](${runUrl})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
